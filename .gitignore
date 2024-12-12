@@ -24,7 +24,7 @@ wheels/
 venv/
 ENV/
 env/
-.env
+.env/
 
 # IDE
 .idea/
@@ -33,30 +33,64 @@ env/
 *.swo
 .project
 .pydevproject
-.settings
+.settings/
 
 # Database
 *.db
 *.sqlite3
 *.sqlite
 
-# Logs and temporary files
+# Logs
+logs/
 *.log
-*.tmp
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Project-specific
-unused_files/
+log/
+tmp/
 temp/
-.pytest_cache/
-.coverage
-htmlcov/
 
-# Keep
-!images/
-!requirements.txt
-!LICENSE
-!README.md
-!Grade Evaluation System.py
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+data/eecp_gesys.db
+!data/

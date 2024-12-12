@@ -19,12 +19,14 @@ EECP GESYS is a comprehensive grade evaluation system developed specifically for
 ### 🔐 User Authentication
 - **Role-Based Access Control**
   - Separate portals for Students and Registrars
+  - Default admin account for initial setup
   - Secure password encryption
   - Session management
 - **User Registration**
   - Intuitive registration forms
   - Real-time input validation
   - Automatic data verification
+  - Email domain verification (@eecp.edu.ph)
 
 ### 📊 Grade Management
 - **Comprehensive Grade Tracking**
@@ -35,6 +37,7 @@ EECP GESYS is a comprehensive grade evaluation system developed specifically for
   - Complete academic record
   - Printable grade reports
   - Progress tracking
+  - Export functionality
 
 ### 💻 User Interface
 - **Modern Design**
@@ -46,6 +49,7 @@ EECP GESYS is a comprehensive grade evaluation system developed specifically for
   - Form validation
   - Error handling
   - Helpful tooltips
+  - Input format guides
 
 ## 🔧 System Requirements
 
@@ -90,25 +94,39 @@ EECP GESYS is a comprehensive grade evaluation system developed specifically for
    python run.py
    ```
 
-2. **First-Time Setup**
+2. **Default Credentials**
 
-   **For Registrars:**
+   **For Registrar (Admin):**
+   ```
+   Username: admin
+   Password: admin123
+   ```
+   
+   **For Student (Sample):**
+   ```
+   Student Number: student
+   Password: student123
+   ```
+
+3. **First-Time Setup**
+
+   **For New Registrars:**
    - Select "Registrar Login"
    - Click "Sign Up"
    - Required Information:
-     - Registrar ID
+     - Registrar ID (e.g., REG001)
      - Full Name
-     - Password
+     - Password (minimum 8 characters)
    
-   **For Students:**
+   **For New Students:**
    - Use main login screen
    - Click "Sign Up"
    - Required Information:
-     - Student Number
+     - Student Number (e.g., 2024xxxxx)
      - Full Name
-     - Mobile Number
-     - Email Address
-     - Password
+     - Mobile Number (e.g., 09xxxxxxxxx)
+     - Email Address (@eecp.edu.ph)
+     - Password (minimum 8 characters)
 
 ## 📁 Project Structure
 

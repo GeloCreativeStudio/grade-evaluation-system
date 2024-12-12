@@ -87,25 +87,40 @@ EECP GESYS is a comprehensive grade evaluation system developed specifically for
    python -m src.database.init_database
    ```
 
+## 🔑 Default Credentials
+
+### Administrator Access
+```
+Registrar ID: REG001
+Name: System Administrator
+Password: admin123
+```
+
+### Sample Student Account
+```
+Student Number: 202410769
+Name: Angelo Manalo
+Password: student123
+Email: 202410769@eecp.edu.ph
+```
+
+### Alternative Admin Account
+```
+Registrar ID: REG002
+Name: Angelo Manalo
+Password: admin123
+```
+
 ## 🚀 Quick Start
 
-1. **Launch Application**
+1. **Initialize Database**
+   ```bash
+   python -m src.database.init_database
+   ```
+
+2. **Launch Application**
    ```bash
    python run.py
-   ```
-
-2. **Default Credentials**
-
-   **For Registrar (Admin):**
-   ```
-   Username: admin
-   Password: admin123
-   ```
-   
-   **For Student (Sample):**
-   ```
-   Student Number: student
-   Password: student123
    ```
 
 3. **First-Time Setup**
@@ -114,7 +129,7 @@ EECP GESYS is a comprehensive grade evaluation system developed specifically for
    - Select "Registrar Login"
    - Click "Sign Up"
    - Required Information:
-     - Registrar ID (e.g., REG001)
+     - Registrar ID (e.g., REG003)
      - Full Name
      - Password (minimum 8 characters)
    

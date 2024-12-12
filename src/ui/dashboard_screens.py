@@ -328,7 +328,7 @@ class RegistrarDashboardNew(ttk.Frame):
         
         # College dropdown
         ttk.Label(main_frame, text="College *").grid(row=row, column=0, sticky='w')
-        colleges = ['COMPUTER STUDIES', 'ENGINEERING', 'BUSINESS', 'ARTS AND SCIENCES']
+        colleges = ['COMPUTER STUDIES', 'ENGINEERING', 'BUSINESS', 'ARTS AND SCIENCES', 'EDUCATION', 'HOSPITALITY']
         fields['college'] = ttk.Combobox(main_frame, values=colleges, width=27, state='readonly')
         fields['college'].grid(row=row, column=1, pady=5, sticky='w')
         row += 1
@@ -341,13 +341,29 @@ class RegistrarDashboardNew(ttk.Frame):
         def update_programs(*args):
             college = fields['college'].get()
             if college == 'COMPUTER STUDIES':
-                programs = ['BSCSAI', 'BSIT', 'BSCS']
-            elif college == 'ENGINEERING':
-                programs = ['BSCE', 'BSEE', 'BSME']
+                programs = ['BSIT - Bachelor of Science in Information Technology',
+                           'BSCS - Bachelor of Science in Computer Science',
+                           'BSCSAI - Bachelor of Science in Computer Science with AI']
             elif college == 'BUSINESS':
-                programs = ['BSBA', 'BSA', 'BSMA']
+                programs = ['BSBA - Bachelor of Science in Business Administration',
+                           'BSA - Bachelor of Science in Accountancy',
+                           'BSMA - Bachelor of Science in Management Accounting']
+            elif college == 'EDUCATION':
+                programs = ['BSEd - Bachelor of Science in Education (Elementary)',
+                           'BSEd - Bachelor of Science in Education (Secondary)',
+                           'BEEd - Bachelor of Elementary Education']
+            elif college == 'HOSPITALITY':
+                programs = ['BSHRM - Bachelor of Science in Hotel & Restaurant Management',
+                           'BSTM - Bachelor of Science in Tourism Management',
+                           'BSHm - Bachelor of Science in Hospitality Management']
+            elif college == 'ENGINEERING':
+                programs = ['BSCE - Bachelor of Science in Civil Engineering',
+                           'BSEE - Bachelor of Science in Electrical Engineering',
+                           'BSME - Bachelor of Science in Mechanical Engineering']
             else:  # ARTS AND SCIENCES
-                programs = ['BA COM', 'BA PSY', 'BS PSY']
+                programs = ['BA COM - Bachelor of Arts in Communication',
+                           'BA PSY - Bachelor of Arts in Psychology',
+                           'BS PSY - Bachelor of Science in Psychology']
             fields['program']['values'] = programs
         
         fields['college'].bind('<<ComboboxSelected>>', update_programs)
@@ -586,7 +602,7 @@ class RegistrarDashboardNew(ttk.Frame):
         
         # College dropdown
         ttk.Label(main_frame, text="College *").grid(row=row, column=0, sticky='w')
-        colleges = ['COMPUTER STUDIES', 'ENGINEERING', 'BUSINESS', 'ARTS AND SCIENCES']
+        colleges = ['COMPUTER STUDIES', 'ENGINEERING', 'BUSINESS', 'ARTS AND SCIENCES', 'EDUCATION', 'HOSPITALITY']
         fields['college'] = ttk.Combobox(main_frame, values=colleges, width=27, state='readonly')
         fields['college'].grid(row=row, column=1, pady=5, sticky='w')
         fields['college'].set(student_values[6])
@@ -600,13 +616,29 @@ class RegistrarDashboardNew(ttk.Frame):
         def update_programs(*args):
             college = fields['college'].get()
             if college == 'COMPUTER STUDIES':
-                programs = ['BSCSAI', 'BSIT', 'BSCS']
-            elif college == 'ENGINEERING':
-                programs = ['BSCE', 'BSEE', 'BSME']
+                programs = ['BSIT - Bachelor of Science in Information Technology',
+                           'BSCS - Bachelor of Science in Computer Science',
+                           'BSCSAI - Bachelor of Science in Computer Science with AI']
             elif college == 'BUSINESS':
-                programs = ['BSBA', 'BSA', 'BSMA']
+                programs = ['BSBA - Bachelor of Science in Business Administration',
+                           'BSA - Bachelor of Science in Accountancy',
+                           'BSMA - Bachelor of Science in Management Accounting']
+            elif college == 'EDUCATION':
+                programs = ['BSEd - Bachelor of Science in Education (Elementary)',
+                           'BSEd - Bachelor of Science in Education (Secondary)',
+                           'BEEd - Bachelor of Elementary Education']
+            elif college == 'HOSPITALITY':
+                programs = ['BSHRM - Bachelor of Science in Hotel & Restaurant Management',
+                           'BSTM - Bachelor of Science in Tourism Management',
+                           'BSHm - Bachelor of Science in Hospitality Management']
+            elif college == 'ENGINEERING':
+                programs = ['BSCE - Bachelor of Science in Civil Engineering',
+                           'BSEE - Bachelor of Science in Electrical Engineering',
+                           'BSME - Bachelor of Science in Mechanical Engineering']
             else:  # ARTS AND SCIENCES
-                programs = ['BA COM', 'BA PSY', 'BS PSY']
+                programs = ['BA COM - Bachelor of Arts in Communication',
+                           'BA PSY - Bachelor of Arts in Psychology',
+                           'BS PSY - Bachelor of Science in Psychology']
             fields['program']['values'] = programs
         
         fields['college'].bind('<<ComboboxSelected>>', update_programs)

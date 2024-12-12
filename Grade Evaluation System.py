@@ -3,63 +3,73 @@ import tkinter as tk
 import ttkthemes
 from tkinter import ttk, Frame, simpledialog, messagebox
 from PIL import Image, ImageTk
+import hashlib
+from pathlib import Path
 
-def fetch_courses():
-    # Connect to the SQLite database
-    conn = sqlite3.connect('my_database.db')
-    cursor = conn.cursor()
+IMAGES_DIR = Path(__file__).parent / "images"
 
-    # Execute a query to fetch course names
-    cursor.execute("SELECT course_name FROM courses")
-    courses = [row[0] for row in cursor.fetchall()]
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-    # Close the database connection
-    conn.close()
+def db_connection(func):
+    def wrapper(*args, **kwargs):
+        conn = sqlite3.connect('my_database.db')
+        try:
+            result = func(conn, *args, **kwargs)
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            result = None
+        finally:
+            conn.close()
+        return result
+    return wrapper
 
-    # Return the list of course names
-    return courses
-
-def fetch_user_credentials(student_number, password):
-    # Connect to the SQLite database
-    conn = sqlite3.connect("my_database.db")
-    cursor = conn.cursor()
-
-    # Query the students table to fetch the student data by student_number and password
-    cursor.execute('SELECT name, student_number FROM students WHERE student_number = ? AND password = ?', (student_number, password))
-    result = cursor.fetchone()  # Fetch the first result
-
-    # Close the database connection
-    conn.close()
-
-    if result:
-        return result  # Returns a tuple containing the student data (student_number, name, password, etc.)
-    else:
-        return None  # No matching user found
-
-def fetch_user_credentials2(registrar_number, password):
-    # Connect to the SQLite database
-    conn = sqlite3.connect("my_database.db")
-    cursor = conn.cursor()
-
-    # Query the registrars table to fetch the registrar data by registrar_number and password
-    cursor.execute('SELECT * FROM registrars WHERE registrar_number = ? AND password = ?', (registrar_number, password))
-    result = cursor.fetchone()  # Fetch the first result
-
-    # Close the database connection
-    conn.close()
-
-    if result:
-        return result  # Returns a tuple containing the registrar data (registrar_number, name, password, etc.)
-    else:
-        return None  # No matching user found
-
-def populate_treeview_from_db(tree):
-    # Connect to the database
-    connection = sqlite3.connect('my_database.db')  # Adjust as necessary
-    cursor = connection.cursor()
-
+@db_connection
+def fetch_courses(conn):
+    """Fetch all available courses from the database."""
     try:
-        # Fetch data
+        cursor = conn.cursor()
+        cursor.execute("SELECT course_name FROM courses")
+        return [row[0] for row in cursor.fetchall()]
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return []
+
+@db_connection
+def fetch_user_credentials(conn, student_number, password):
+    """Verify student credentials and return user data if valid."""
+    try:
+        cursor = conn.cursor()
+        hashed_password = hash_password(password)
+        cursor.execute(
+            'SELECT name, student_number FROM students WHERE student_number = ? AND password = ?',
+            (student_number, hashed_password)
+        )
+        return cursor.fetchone()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return None
+
+@db_connection
+def fetch_user_credentials2(conn, registrar_number, password):
+    """Verify registrar credentials and return user data if valid."""
+    try:
+        cursor = conn.cursor()
+        hashed_password = hash_password(password)
+        cursor.execute(
+            'SELECT * FROM registrars WHERE registrar_number = ? AND password = ?',
+            (registrar_number, hashed_password)
+        )
+        return cursor.fetchone()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return None
+
+@db_connection
+def populate_treeview_from_db(conn, tree):
+    """Fetch data from the database and populate the Treeview."""
+    try:
+        cursor = conn.cursor()
         cursor.execute("SELECT course_number, subject_name, units, rating, final_grade, status FROM student")
         data = cursor.fetchall()
 
@@ -70,659 +80,792 @@ def populate_treeview_from_db(tree):
         # Insert data into the Treeview
         for row in data:
             tree.insert('', 'end', values=row)
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
 
-    except Exception as e:
-        print(f"Error: {e}")
-
-    finally:
-        # Close the database connection
-        connection.close()
-
-def insert_user_data_st(name, student_number, course, mobile_number, email_address, password):
+@db_connection
+def insert_user_data_st(conn, name, student_number, course, mobile_number, email_address, password):
+    """Insert student data into the database."""
     try:
-        conn = sqlite3.connect('my_database.db')
-
-        # Insert the data into the students table
-        data_insert_query='''INSERT INTO students (name, student_number, course, mobile_number, email_address, password) VALUES (?, ?, ?, ?, ?, ?)'''
-        data_insert_tuple=(name, student_number, course, mobile_number, email_address, password)
+        hashed_password = hash_password(password)
         cursor = conn.cursor()
-        conn.execute(data_insert_query, data_insert_tuple)
+        data_insert_query = '''INSERT INTO students (name, student_number, course, mobile_number, email_address, password) VALUES (?, ?, ?, ?, ?, ?)'''
+        data_insert_tuple = (name, student_number, course, mobile_number, email_address, hashed_password)
+        cursor.execute(data_insert_query, data_insert_tuple)
         conn.commit()  # Commit the changes
-
         print(f"Data inserted successfully: {name}, {student_number}, {course}, {mobile_number}, {email_address}")
     except sqlite3.IntegrityError:
         print(f"Error: Student number {student_number} already exists.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-    finally:
-        conn.close()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
 
-
-# Function to handle the sign-up
-def sign_up_st():
-    student_number = sn_entry.get()
-    name = username_entry3.get()
-    course = cs_combo.get()
-    mobile_number = mn_entry.get()
-    email_address = ea_entry.get()
-    password = pass_entry.get()
-
-    # Check if all fields are filled
-    if not student_number or not name or not course or not mobile_number or not email_address or not password:
-        messagebox.showwarning("Input Error", "All fields are required!")
-        return
-
+@db_connection
+def insert_user_dataR(conn, registrar_number, name, password):
+    """Insert registrar data into the database."""
     try:
-        # Call the function with all the necessary arguments
-        insert_user_data_st(name, student_number, course, mobile_number, email_address, password)
-        messagebox.showinfo("Success", "Sign-Up Successful!")
-        showSL2()  # Assuming this is your function to show the next screen
-        clear_form()
-    except sqlite3.IntegrityError:
-        messagebox.showerror("Error", "This student number is already taken.")
-    except Exception as e:
-        messagebox.showerror("Error", f"An error occurred: {e}")
-
-# Function to clear the form fields after submission
-def clear_form():
-    sn_entry.delete(0, tk.END)
-    username_entry3.delete(0, tk.END)
-    cs_combo.delete(0, tk.END)
-    mn_entry.delete(0, tk.END)
-    ea_entry.delete(0, tk.END)
-    mn_entry.delete(0, tk.END)
-    pass_entry.delete(0, tk.END)
-    cpass_entry.delete(0, tk.END)
-
-
-def insert_user_dataR(registrar_number, name, password):
-    try:
-        conn = sqlite3.connect('my_database.db')
-
-        # Insert the data into the registrars table
-        data_insert_query2 = '''INSERT INTO registrars (registrar_number, name, password) VALUES (?, ?, ?)'''
-        data_insert_tuple2 = (registrar_number, name, password)
-
-        conn.execute(data_insert_query2, data_insert_tuple2)
+        hashed_password = hash_password(password)
         cursor = conn.cursor()
+        data_insert_query2 = '''INSERT INTO registrars (registrar_number, name, password) VALUES (?, ?, ?)'''
+        data_insert_tuple2 = (registrar_number, name, hashed_password)
+        cursor.execute(data_insert_query2, data_insert_tuple2)
         conn.commit()  # Commit the changes
         print(f"Data inserted: {registrar_number}, {name}, {password}")
     except sqlite3.IntegrityError:
         print(f"Error: Registrar number {registrar_number} already exists.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-    finally:
-        conn.close()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
 
-# Function to handle the sign-up
-def sign_up():
-    registrar_number = rn_entry.get()
-    name = username_entry1.get()
-    password = pass_entry1.get()
+# UI Constants and Styles
+WINDOW_WIDTH = 1320
+WINDOW_HEIGHT = 780
+PADDING = 20
+BUTTON_WIDTH = 150
+BUTTON_HEIGHT = 40
+ENTRY_WIDTH = 250
+ENTRY_HEIGHT = 30
 
-    # Check if all fields are filled
-    if not registrar_number or not name or not password:
-        messagebox.showwarning("Input Error", "All fields are required!")
-        return
+class GradeEvaluationSystem:
+    def __init__(self):
+        self.initialize_database()  # Initialize database first
+        self.setup_window()
+        self.setup_styles()
+        self.create_frames()
+        self.create_entry_screen()  # Show the entry screen by default
+        self.show_entry()  # Show the entry screen
+        
+    def setup_window(self):
+        self.root = ttkthemes.ThemedTk()
+        self.root.state('zoomed')
+        self.root.title("EECP Grade Evaluation System")
+        self.root.set_theme('arc')
+        
+    def setup_styles(self):
+        style = ttk.Style()
+        style.configure('TButton', padding=5)
+        style.configure('TEntry', padding=5)
+        style.configure('TLabel', padding=5)
+        
+    def create_frames(self):
+        # Create main container
+        self.main_container = ttk.Frame(self.root)
+        self.main_container.grid(row=0, column=0, sticky="nsew")
+        
+        # Configure grid weights for main container
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.main_container.grid_rowconfigure(0, weight=1)
+        self.main_container.grid_columnconfigure(0, weight=1)
+        
+        # Create frames
+        self.create_entry_screen()
+        self.create_student_login()
+        self.create_student_signup()
+        self.create_student_dashboard()
+        self.create_registrar_login()
+        self.create_registrar_dashboard()
 
-    try:
-        # Insert data into the database
-        insert_user_dataR(registrar_number, name, password)
-        messagebox.showinfo("Success", "Sign-Up Successful!")
-        showRL2()
-        clear_form2()
-    except sqlite3.IntegrityError:
-        messagebox.showerror("Error", "This registrar number is already taken.")
-    except Exception as e:
-        messagebox.showerror("Error", f"An error occurred: {e}")
+    def create_entry_screen(self):
+        """Create the entry screen with student and registrar login options."""
+        self.entry_frame = ttk.Frame(self.main_container)
+        self.entry_frame.grid(row=0, column=0, sticky="nsew")
+        
+        # Create a centered frame for buttons
+        center_frame = ttk.Frame(self.entry_frame)
+        center_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Add title label
+        title_label = ttk.Label(center_frame, text="Grade Evaluation System", font=("Helvetica", 16, "bold"))
+        title_label.pack(pady=20)
+        
+        # Add buttons
+        ttk.Button(center_frame, text="Student Login", command=self.show_student_login, width=20).pack(pady=10)
+        ttk.Button(center_frame, text="Student Sign Up", command=self.show_student_signup, width=20).pack(pady=10)
+        ttk.Button(center_frame, text="Registrar Login", command=self.show_registrar_login, width=20).pack(pady=10)
 
-# Function to clear the form fields after submission
-def clear_form2():
-    rn_entry.delete(0, tk.END)
-    username_entry1.delete(0, tk.END)
-    pass_entry.delete(0, tk.END)
-    cpass_entry.delete(0, tk.END)
+    def create_student_login(self):
+        """Create the student login frame."""
+        self.student_login = ttk.Frame(self.main_container)
+        
+        # Create a centered frame for login
+        login_frame = ttk.LabelFrame(self.student_login, text="Student Login")
+        login_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Username
+        ttk.Label(login_frame, text="Student Number:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.student_username = ttk.Entry(login_frame, width=30)
+        self.student_username.grid(row=0, column=1, padx=5, pady=5)
+        
+        # Password
+        ttk.Label(login_frame, text="Password:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.student_password = ttk.Entry(login_frame, show="*", width=30)
+        self.student_password.grid(row=1, column=1, padx=5, pady=5)
+        
+        # Buttons
+        button_frame = ttk.Frame(login_frame)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        
+        ttk.Button(button_frame, text="Login", command=self.student_login_action).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_entry).pack(side="left", padx=5)
 
-def on_entry_click(event, entry, default_text):
-    if entry.get() == default_text:
-        entry.delete(0, "end")
-        entry.insert(0, '')
-        entry.config(foreground='black')
+    def create_student_signup(self):
+        self.student_signup = ttk.Frame(self.main_container)
+        self.student_signup.grid(row=0, column=0, sticky="nsew")
+        self.student_signup.grid_remove()  # Hide initially
+        
+        # Create a centered frame for signup
+        signup_frame = ttk.LabelFrame(self.student_signup, text="Student Sign Up")
+        signup_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Name
+        ttk.Label(signup_frame, text="Name:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.signup_name = ttk.Entry(signup_frame)
+        self.signup_name.grid(row=0, column=1, padx=5, pady=5)
+        
+        # Student Number
+        ttk.Label(signup_frame, text="Student Number:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.signup_student_number = ttk.Entry(signup_frame)
+        self.signup_student_number.grid(row=1, column=1, padx=5, pady=5)
+        
+        # Course
+        ttk.Label(signup_frame, text="Course:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
+        self.signup_course = ttk.Combobox(signup_frame, state="readonly")
+        self.signup_course['values'] = fetch_courses()
+        self.signup_course.grid(row=2, column=1, padx=5, pady=5)
+        
+        # Mobile Number
+        ttk.Label(signup_frame, text="Mobile Number:").grid(row=3, column=0, padx=5, pady=5, sticky="e")
+        self.signup_mobile = ttk.Entry(signup_frame)
+        self.signup_mobile.grid(row=3, column=1, padx=5, pady=5)
+        
+        # Email
+        ttk.Label(signup_frame, text="Email:").grid(row=4, column=0, padx=5, pady=5, sticky="e")
+        self.signup_email = ttk.Entry(signup_frame)
+        self.signup_email.grid(row=4, column=1, padx=5, pady=5)
+        
+        # Password
+        ttk.Label(signup_frame, text="Password:").grid(row=5, column=0, padx=5, pady=5, sticky="e")
+        self.signup_password = ttk.Entry(signup_frame, show="*")
+        self.signup_password.grid(row=5, column=1, padx=5, pady=5)
+        
+        # Confirm Password
+        ttk.Label(signup_frame, text="Confirm Password:").grid(row=6, column=0, padx=5, pady=5, sticky="e")
+        self.signup_confirm_password = ttk.Entry(signup_frame, show="*")
+        self.signup_confirm_password.grid(row=6, column=1, padx=5, pady=5)
+        
+        # Buttons
+        button_frame = ttk.Frame(signup_frame)
+        button_frame.grid(row=7, column=0, columnspan=2, pady=10)
+        
+        ttk.Button(button_frame, text="Sign Up", command=self.sign_up_st).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_entry).pack(side="left", padx=5)
 
+    def create_student_dashboard(self):
+        self.student_dashboard = ttk.Frame(self.main_container)
+        
+        # Create a centered dashboard
+        dashboard_frame = ttk.LabelFrame(self.student_dashboard, text="Student Dashboard")
+        dashboard_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Create Treeview with scrollbar
+        tree_frame = ttk.Frame(dashboard_frame)
+        tree_frame.grid(row=0, column=0, columnspan=2, padx=PADDING, pady=PADDING, sticky="nsew")
+        
+        # Create Treeview
+        columns = ('course_code', 'course_name', 'units', 'midterm_grade', 'final_grade', 'remarks')
+        self.student_tree = ttk.Treeview(tree_frame, columns=columns, show='headings')
+        
+        # Define column headings
+        self.student_tree.heading('course_code', text='Course Code')
+        self.student_tree.heading('course_name', text='Course Name')
+        self.student_tree.heading('units', text='Units')
+        self.student_tree.heading('midterm_grade', text='Midterm Grade')
+        self.student_tree.heading('final_grade', text='Final Grade')
+        self.student_tree.heading('remarks', text='Remarks')
+        
+        # Define column widths
+        self.student_tree.column('course_code', width=100)
+        self.student_tree.column('course_name', width=200)
+        self.student_tree.column('units', width=50)
+        self.student_tree.column('midterm_grade', width=100)
+        self.student_tree.column('final_grade', width=100)
+        self.student_tree.column('remarks', width=100)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.student_tree.yview)
+        self.student_tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Grid the Treeview and scrollbar
+        self.student_tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        # Configure grid weights
+        tree_frame.grid_columnconfigure(0, weight=1)
+        tree_frame.grid_rowconfigure(0, weight=1)
+        
+        # Buttons
+        button_frame = ttk.Frame(dashboard_frame)
+        button_frame.grid(row=1, column=0, columnspan=2, pady=PADDING)
+        
+        ttk.Button(button_frame, text="Refresh", command=self.populate_student_treeview).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_student_login).pack(side="left", padx=5)
 
-def on_focusout(event, entry, default_text):
-    if entry.get() == '':
-        entry.insert(0, default_text)
-        entry.config(foreground='grey')
+    def populate_student_treeview(self):
+        """Populate the student dashboard treeview with grades."""
+        try:
+            # Clear existing items
+            for item in self.student_tree.get_children():
+                self.student_tree.delete(item)
+            
+            with sqlite3.connect('my_database.db') as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT c.course_code, c.course_name, c.units, 
+                           g.midterm_grade, g.final_grade, g.remarks
+                    FROM grades g
+                    JOIN courses c ON g.course_code = c.course_code
+                    WHERE g.student_number = ?
+                    ORDER BY g.semester, c.course_code
+                """, (self.current_student,))
+                
+                for row in cursor.fetchall():
+                    self.student_tree.insert('', 'end', values=row)
+                    
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Failed to fetch grades: {e}")
+            print(f"Database error: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            print(f"Error: {e}")
 
+    def create_registrar_login(self):
+        """Create the registrar login frame."""
+        self.registrar_login = ttk.Frame(self.main_container)
+        
+        # Create a centered frame for login
+        login_frame = ttk.LabelFrame(self.registrar_login, text="Registrar Login")
+        login_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Registrar Number
+        ttk.Label(login_frame, text="Registrar Number:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.registrar_number = ttk.Entry(login_frame, width=30)
+        self.registrar_number.grid(row=0, column=1, padx=5, pady=5)
+        
+        # Password
+        ttk.Label(login_frame, text="Password:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.registrar_password = ttk.Entry(login_frame, show="*", width=30)
+        self.registrar_password.grid(row=1, column=1, padx=5, pady=5)
+        
+        # Buttons
+        button_frame = ttk.Frame(login_frame)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        
+        ttk.Button(button_frame, text="Login", command=self.registrar_login_action).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_entry).pack(side="left", padx=5)
 
+    def registrar_login_action(self):
+        """Handle registrar login."""
+        registrar_number = self.registrar_number.get().strip()
+        password = self.registrar_password.get()
 
-def showSL():
-    eS.pack_forget()
-    sl.pack(fill="both", expand=True)
+        if not registrar_number or not password:
+            messagebox.showwarning("Input Error", "Please fill in all fields!")
+            return
 
-def showGES():
-    sl.pack_forget()
-    eS.pack(fill="both", expand=True)
+        try:
+            with sqlite3.connect('my_database.db') as conn:
+                cursor = conn.cursor()
+                hashed_password = hash_password(password)
+                cursor.execute("""
+                    SELECT name, registrar_number 
+                    FROM registrars 
+                    WHERE registrar_number = ? AND password = ?
+                """, (registrar_number, hashed_password))
+                result = cursor.fetchone()
 
-def showSS():
-    sl.pack_forget()
-    ss.pack(fill="both", expand=True)
+                if result:
+                    messagebox.showinfo("Success", f"Welcome, {result[0]}!")
+                    self.current_registrar = result[1]  # Store registrar number for dashboard
+                    self.show_registrar_dashboard()
+                else:
+                    messagebox.showerror("Error", "Invalid registrar number or password!")
 
-def showSL2():
-    ss.pack_forget()
-    sl.pack(fill="both", expand=True)
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Failed to verify credentials: {e}")
+            print(f"Database error: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            print(f"Error: {e}")
 
-def showST():
-    # update_student_table(stdTable)  # Update the student table before showing it
-    sl.pack_forget()
-    st.pack(fill="both", expand=True)
+    def create_registrar_signup(self):
+        self.registrar_signup = ttk.Frame(self.main_container)
+        
+        # Create a centered signup form
+        signup_frame = ttk.LabelFrame(self.registrar_signup, text="Registrar Signup")
+        signup_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Registrar Number field
+        ttk.Label(signup_frame, text="Registrar Number:").grid(row=0, column=0, padx=PADDING, pady=PADDING)
+        self.rn_entry = ttk.Entry(signup_frame, width=30)
+        self.rn_entry.grid(row=0, column=1, padx=PADDING, pady=PADDING)
+        
+        # Name field
+        ttk.Label(signup_frame, text="Name:").grid(row=1, column=0, padx=PADDING, pady=PADDING)
+        self.username_entry1 = ttk.Entry(signup_frame, width=30)
+        self.username_entry1.grid(row=1, column=1, padx=PADDING, pady=PADDING)
+        
+        # Password field
+        ttk.Label(signup_frame, text="Password:").grid(row=2, column=0, padx=PADDING, pady=PADDING)
+        self.pass_entry1 = ttk.Entry(signup_frame, show="*", width=30)
+        self.pass_entry1.grid(row=2, column=1, padx=PADDING, pady=PADDING)
+        
+        # Buttons
+        button_frame = ttk.Frame(signup_frame)
+        button_frame.grid(row=3, column=0, columnspan=2, pady=PADDING)
+        
+        ttk.Button(button_frame, text="Sign Up", command=self.sign_up).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_registrar_login).pack(side="left", padx=5)
 
-def login():
-    student_number = username_entry.get()  # Assuming you have a field for student number
-    password = password_entry.get()
+    def create_registrar_dashboard(self):
+        self.registrar_dashboard = ttk.Frame(self.main_container)
+        
+        # Create a centered dashboard
+        dashboard_frame = ttk.LabelFrame(self.registrar_dashboard, text="Registrar Dashboard")
+        dashboard_frame.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Create search frame
+        search_frame = ttk.Frame(dashboard_frame)
+        search_frame.grid(row=0, column=0, columnspan=2, padx=PADDING, pady=PADDING, sticky="ew")
+        
+        ttk.Label(search_frame, text="Search Student:").pack(side="left", padx=5)
+        self.search_entry = ttk.Entry(search_frame, width=30)
+        self.search_entry.pack(side="left", padx=5)
+        ttk.Button(search_frame, text="Search", command=self.search_student).pack(side="left", padx=5)
+        
+        # Create Treeview with scrollbar
+        tree_frame = ttk.Frame(dashboard_frame)
+        tree_frame.grid(row=1, column=0, columnspan=2, padx=PADDING, pady=PADDING, sticky="nsew")
+        
+        # Create Treeview
+        columns = ('student_number', 'name', 'course_code', 'course_name', 'semester', 'school_year', 'midterm_grade', 'final_grade', 'remarks')
+        self.registrar_tree = ttk.Treeview(tree_frame, columns=columns, show='headings')
+        
+        # Define column headings
+        self.registrar_tree.heading('student_number', text='Student Number')
+        self.registrar_tree.heading('name', text='Name')
+        self.registrar_tree.heading('course_code', text='Course Code')
+        self.registrar_tree.heading('course_name', text='Course Name')
+        self.registrar_tree.heading('semester', text='Semester')
+        self.registrar_tree.heading('school_year', text='School Year')
+        self.registrar_tree.heading('midterm_grade', text='Midterm Grade')
+        self.registrar_tree.heading('final_grade', text='Final Grade')
+        self.registrar_tree.heading('remarks', text='Remarks')
+        
+        # Define column widths
+        self.registrar_tree.column('student_number', width=100)
+        self.registrar_tree.column('name', width=150)
+        self.registrar_tree.column('course_code', width=100)
+        self.registrar_tree.column('course_name', width=200)
+        self.registrar_tree.column('semester', width=100)
+        self.registrar_tree.column('school_year', width=100)
+        self.registrar_tree.column('midterm_grade', width=100)
+        self.registrar_tree.column('final_grade', width=100)
+        self.registrar_tree.column('remarks', width=100)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.registrar_tree.yview)
+        self.registrar_tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Grid the Treeview and scrollbar
+        self.registrar_tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        # Configure grid weights
+        tree_frame.grid_columnconfigure(0, weight=1)
+        tree_frame.grid_rowconfigure(0, weight=1)
+        
+        # Add double-click event binding for editing
+        self.registrar_tree.bind("<Double-1>", self.edit_grade)
+        
+        # Buttons
+        button_frame = ttk.Frame(dashboard_frame)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=PADDING)
+        
+        ttk.Button(button_frame, text="Refresh", command=self.populate_registrar_treeview).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Back", command=self.show_registrar_login).pack(side="left", padx=5)
 
-    # Fetch credentials from the database
-    user_data = fetch_user_credentials(student_number, password)
+    def search_student(self):
+        """Search for a student in the database."""
+        search_term = self.search_entry.get().strip()
+        if not search_term:
+            messagebox.showwarning("Input Error", "Please enter a search term")
+            return
+            
+        try:
+            with sqlite3.connect('my_database.db') as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT s.student_number, s.name, c.course_code, c.course_name,
+                           g.semester, g.school_year, g.midterm_grade, g.final_grade, g.remarks
+                    FROM grades g
+                    JOIN students s ON g.student_number = s.student_number
+                    JOIN courses c ON g.course_code = c.course_code
+                    WHERE s.student_number LIKE ? OR s.name LIKE ?
+                """, (f"%{search_term}%", f"%{search_term}%"))
+                
+                # Clear existing items
+                for item in self.registrar_tree.get_children():
+                    self.registrar_tree.delete(item)
+                    
+                # Insert new data
+                for row in cursor.fetchall():
+                    self.registrar_tree.insert('', 'end', values=row)
+                    
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Failed to search student: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
 
-    if user_data:
-        name, student_number = user_data
-        messagebox.showinfo("Access Granted", "Welcome, EECPIANS!")
-        showST()  # Proceed to show the student frame
-        Std_label.config(text=f"{name}  (# {student_number})")
-    else:
-        messagebox.showerror("Access Denied", "Invalid entry!")
-
-
-def showRL():
-    eS.pack_forget()
-    rl.pack(fill="both", expand=True)
-
-def showGES2():
-    rl.pack_forget()
-    eS.pack(fill="both", expand=True)
-
-def showRS():
-    rl.pack_forget()
-    rs.pack(fill="both", expand=True)
-
-def showRL2():
-    rs.pack_forget()
-    rl.pack(fill="both", expand=True)
-
-def showRE():
-    rl.pack_forget()
-    re.pack(fill="both", expand=True)
-
-def login2():
-    registrar_number = username_entryr.get()  # Assuming you have a field for student number
-    password = password_entryr.get()
-
-    # Fetch credentials from the database
-    user_data1 = fetch_user_credentials2(registrar_number, password)
-
-    if user_data1:
-        messagebox.showinfo("", "Access Granted!")
-        showRE()  # Proceed to show the student frame
-    else:
-        messagebox.showerror("Access Denied", "Invalid entry!")
-
-def SignOutST():
-    st.pack_forget()
-    eS.pack(fill="both", expand=True)
-
-def SignOutRE():
-    re.pack_forget()
-    eS.pack(fill="both", expand=True)
-
-# Shared Data Source
-student_data = [
-    ("CS101", "Mathematics", 4, "A", "90", "Pass"),
-    ("ENG101", "English Literature", 3, "B", "85", "Pass"),
-    ("BIO101", "Biology", 4, "C", "70", "Pass")
-]
-
-
-# Other function definitions...
-
-def update_student_table(table):
-    """Clear and update student table with shared data."""
-    for item in table.get_children():
-        table.delete(item)
-    for item in student_data:
-        table.insert('', 'end', values=item)
-
-
-# Function to edit an item in the Treeview
-def edit_item(event, tree):
-    region = tree.identify_region(event.x, event.y)
-    if region == 'cell':
+    def edit_grade(self, event):
+        """Handle double-click event to edit grades."""
+        tree = event.widget
+        region = tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+            
         column = tree.identify_column(event.x)
-        column_index = int(column[1:]) - 1
-        selected_item = tree.selection()
-
-        if selected_item:
-            for item in selected_item:
-                values = tree.item(item, "values")
-                if 0 <= column_index < len(values):
-                    current_value = values[column_index]
-                    new_value = simpledialog.askstring("Edit Value",
-                                                       f"Edit value for '{tree.heading(column, 'text')}'\nCurrent: {current_value}")
-
-                    if new_value and new_value.strip():
-                        values = list(values)
-                        values[column_index] = new_value.strip()
-                        tree.item(item, values=values)
-
-                        # Update the shared data
-                        item_index = tree.index(item)
-                        student_data[item_index] = tuple(values)
-
-
-ges = ttkthemes.ThemedTk()
-ges.state('zoomed')
-ges.title("EECP Grade Evaluation System")
-ges.set_theme('arc')
-
-#fontframe
-eS = tk.Frame(ges)
-eS.pack(fill="both", expand=True)
-bg=Frame(eS,bg='#E8D8D8')
-bg.place(x=0,y=0,width=1320,height=780)
-background_image = Image.open("EECP GESYS Front.jpg")
-background_image = background_image.resize((1320, 780))
-background_photo = ImageTk.PhotoImage(background_image)
-background_label = tk.Label(bg, image=background_photo)
-background_label.place(relwidth=1, relheight=1)
-
-studentButton=ttk.Button(ges,text='STUDENT',command=showSL)
-studentButton.place(x=993, y=430, width=150,height=50)
-registrarButton=ttk.Button(ges,text='REGISTRAR',command=showRL)
-registrarButton.place(x=993, y=490, width=150,height=50)
-
-# Student Log in Frame
-sl = tk.Frame(ges)
-bgl=Frame(sl,bg='#E8D8D8')
-bgl.place(x=0,y=0,width=1320,height=780)
-bgI = Image.open("EECP GESYS FrontSS.jpg")
-bgI = bgI.resize((1320, 780))
-bgP = ImageTk.PhotoImage(bgI)
-background_label1 = tk.Label(bgl, image=bgP)
-background_label1.place(relwidth=1, relheight=1)
-
-placeholder_text1 = "Student Number"
-username_entry = ttk.Entry(sl, foreground='grey')
-username_entry.place(x=900, y=420, width=300, height=30)
-username_entry.insert(0, placeholder_text1)
-username_entry.bind('<FocusIn>', lambda event: on_entry_click(event, username_entry, placeholder_text1))
-username_entry.bind('<FocusOut>', lambda event: on_focusout(event, username_entry, placeholder_text1))
-
-placeholder_text2 = "Password"
-password_entry = ttk.Entry(sl, foreground='grey', show="*")
-password_entry.place(x=900, y=470, width=300, height=30)
-password_entry.insert(0, placeholder_text2)
-password_entry.bind('<FocusIn>', lambda event: on_entry_click(event, password_entry, placeholder_text2))
-password_entry.bind('<FocusOut>', lambda event: on_focusout(event, password_entry, placeholder_text2))
-
-stdlButton=ttk.Button(sl,text='Login', command=login)
-stdlButton.place(x=955, y=550, width=200,height=30)
-stdSButton=ttk.Button(sl,text='Sign-up', command=showSS)
-stdSButton.place(x=983, y=601, width=150,height=50)
-studentBackButton=ttk.Button(sl,text='Back', command=showGES)
-studentBackButton.place(x=983, y=661, width=150,height=50)
-
-# Student Sign up Frame
-ss = tk.Frame(ges)
-bg2=Frame(ss,bg='#E8D8D8')
-bg2.place(x=0,y=0,width=1320,height=780)
-bgI2 = Image.open("signup.jpg")
-bgI2 = bgI2.resize((1320, 780))
-bgP2 = ImageTk.PhotoImage(bgI2)
-background_label2 = tk.Label(bg2, image=bgP2)
-background_label2.place(relwidth=1, relheight=1)
-
-midFrame=Frame(ss,bg='grey')
-midFrame.place(x=450,y=100,width=350,height=600)
-midFrame=Frame(ss,bg='white')
-midFrame.place(x=451,y=101,width=348,height=598)
-
-login_titleLabel = tk.Label(ss, text='Sign up here', bg='white', font=('Cambria', 15, 'bold'))
-login_titleLabel.place(x=525, y=150, width=200,height=30)
-
-placeholder_text3 = "Student Name"
-username_entry3 = ttk.Entry(ss, foreground='grey')
-username_entry3.place(x=497,y=200, width=250, height=40)
-username_entry3.insert(0, placeholder_text3)
-username_entry3.bind('<FocusIn>', lambda event: on_entry_click(event,username_entry3, placeholder_text3))
-username_entry3.bind('<FocusOut>', lambda event: on_focusout(event, username_entry3, placeholder_text3))
-
-placeholder_text4 = "Student Number"
-sn_entry = ttk.Entry(ss, foreground='grey')
-sn_entry.place(x=497,y=260, width=250, height=40)
-sn_entry.insert(0, placeholder_text4)
-sn_entry.bind('<FocusIn>', lambda event: on_entry_click(event,sn_entry, placeholder_text4))
-sn_entry.bind('<FocusOut>', lambda event: on_focusout(event, sn_entry, placeholder_text4))
-
-course_list = fetch_courses()
-placeholder_text5 = "Select a course"
-cs_combo = ttk.Combobox(ss, foreground='grey', values=course_list)
-cs_combo.place(x=497, y=320, width=250, height=40)
-cs_combo.insert(0, placeholder_text5)
-cs_combo.bind('<FocusIn>', lambda event: on_entry_click(event, cs_combo, placeholder_text5))
-cs_combo.bind('<FocusOut>', lambda event: on_focusout(event, cs_combo, placeholder_text5))
-
-placeholder_text6 = "Mobile.No"
-mn_entry = ttk.Entry(ss, foreground='grey')
-mn_entry.place(x=497,y=380, width=250, height=40)
-mn_entry.insert(0, placeholder_text6)
-mn_entry.bind('<FocusIn>', lambda event: on_entry_click(event,mn_entry, placeholder_text6))
-mn_entry.bind('<FocusOut>', lambda event: on_focusout(event, mn_entry, placeholder_text6))
-
-placeholder_text7 = "Email Address"
-ea_entry = ttk.Entry(ss, foreground='grey')
-ea_entry.place(x=497,y=440, width=250, height=40)
-ea_entry.insert(0, placeholder_text7)
-ea_entry.bind('<FocusIn>', lambda event: on_entry_click(event,ea_entry, placeholder_text7))
-ea_entry.bind('<FocusOut>', lambda event: on_focusout(event, ea_entry, placeholder_text7))
-
-placeholder_text8 = "Password"
-pass_entry = ttk.Entry(ss, foreground='grey', show="*")
-pass_entry.place(x=497,y=500, width=250, height=40)
-pass_entry.insert(0, placeholder_text8)
-pass_entry.bind('<FocusIn>', lambda event: on_entry_click(event,pass_entry, placeholder_text8))
-pass_entry.bind('<FocusOut>', lambda event: on_focusout(event, pass_entry, placeholder_text8))
-
-placeholder_text9 = "Confirm Password"
-cpass_entry = ttk.Entry(ss, foreground='grey', show="*")
-cpass_entry.place(x=497,y=560, width=250, height=40)
-cpass_entry.insert(0, placeholder_text9)
-cpass_entry.bind('<FocusIn>', lambda event: on_entry_click(event,cpass_entry, placeholder_text9))
-cpass_entry.bind('<FocusOut>', lambda event: on_focusout(event, cpass_entry, placeholder_text9))
-
-SignUpButton = ttk.Button(ss, text='Sign up', command=sign_up_st)
-SignUpButton.place(x=497, y=610, width=250, height=30)
-bButton1=ttk.Button(ss,text='Back',command=showSL2)
-bButton1.place(x=497, y=650, width=250,height=30)
-
-# Student Frame
-st = tk.Frame(ges)
-background_image3 = Image.open("stdform.jpg")
-background_image3 = background_image3.resize((1320, 780))
-background_photo3 = ImageTk.PhotoImage(background_image3)
-background_label3 = tk.Label(st, image=background_photo3)
-background_label3.place(relwidth=1, relheight=1)
-
-mOFrame=Frame(st,bg='#E8D8D8')
-mOFrame.place(x=85,y=80,width=1120,height=650)
-mFrame=Frame(st,bg='white')
-mFrame.place(x=86,y=81,width=1118,height=648)
-m1Frame=Frame(st,bg='white')
-m1Frame.place(x=111, y=180, width=1081,height=530)
-searchButton=ttk.Button(mFrame,text='Search')
-searchButton.place(x=435, y=50)
-label= ttk.Label(mFrame,text='Awards')
-label.place(x=900, y=70)
-
-placeholder_text10 = "Subject/Year Level/Semester"
-subj_entry = ttk.Entry(mFrame, foreground='grey')
-subj_entry.place(x=30, y=49, width=400, height=30)
-subj_entry.insert(0, placeholder_text10)
-subj_entry.bind('<FocusIn>', lambda event: on_entry_click(event,subj_entry, placeholder_text10))
-subj_entry.bind('<FocusOut>', lambda event: on_focusout(event, subj_entry, placeholder_text10))
-Std_label = ttk.Label(mFrame, text="", foreground='black')
-Std_label.place(x=50, y=20)
-
-current_step = 0
-steps = []  # Store frames for each step
-
-
-# Function to handle Next Button click
-def next_step():
-    global current_step
-    if current_step < len(steps) - 1:
-        current_step += 1
-        show_step()
-
-# Function to handle Previous Button click
-def previous_step():
-    global current_step
-    if current_step > 0:
-        current_step -= 1
-        show_step()
-
-# Function to display the current step
-def show_step():
-    global current_step
-    # Destroy the previous frame if exists
-    for widget in m1Frame.winfo_children():
-        widget.destroy()
-    # Create and pack the current step frame
-    frame = steps[current_step]()
-    frame.pack(fill="both", expand=True)
-
-
-# Function to create a generic TreeView frame
-def create_treeview_frame(title, col_defs):
-    def frame_func():
-        frame = tk.Frame(m1Frame)
-        # Title
-        label = tk.Label(frame, text=title, font=("Calibri", 20))
-        label.pack(pady=10)
-
-        # Treeview container (Frame for better layout flexibility)
-        tsFrame = Frame(frame, bg='white')
-        tsFrame.pack(fill="both", expand=True, padx=20, pady=10)
-
-        # Extract column names from col_defs
-        columns = list(col_defs.keys())
-
-        # Create TreeView for the step
-        table = ttk.Treeview(tsFrame, columns=columns, show='headings')
-        table.pack(fill="both", expand=True)
-
-        # Define columns
-        for col, width in col_defs.items():
-            table.heading(col, text=col)  # Set the column heading
-            table.column(col, width=width)  # Set the column width
-
-        # Navigation buttons
-        nav_frame = tk.Frame(frame)
-        nav_frame.pack(pady=10)
-
-        if current_step > 0:  # Show Previous button if not on the first step
-            prev_button = ttk.Button(nav_frame, text="Previous", command=previous_step)
-            prev_button.pack(side="left", padx=5)
-
-        if current_step < len(steps) - 1:  # Show Next button if not on the last step
-            next_button = ttk.Button(nav_frame, text="Next", command=next_step)
-            next_button.pack(side="right", padx=5)
-
-        if current_step == len(steps) - 1:  # Show Submit button on the last step
-            submit_button = ttk.Button(nav_frame, text="Submit", command=mFrame.quit)
-            submit_button.pack(side="right", padx=5)
-
-        return frame
-
-    return frame_func
-
-
-# Define column definitions (reused across all steps)
-columns = {
-    "Course Number": 120,
-    "Subject": 200,
-    "Units": 100,
-    "Rating": 100,
-    "Final Grade": 120,
-    "Status": 100,
-}
-
-# List of steps (titles for each and their associated TreeView column definitions)
-step_definitions = [
-    ("1st Year 1st Semester", columns),
-    ("1st Year 2nd Semester", columns),
-    ("2nd Year 1st Semester", columns),
-    ("2nd Year 2nd Semester", columns),
-    ("3rd Year 1st Semester", columns),
-    ("3rd Year 2nd Semester", columns),
-    ("4th Year 1st Semester", columns),
-    ("4th Year 2nd Semester", columns),
-]
-
-# Generate step functions dynamically based on step definitions
-steps = [create_treeview_frame(title, col_defs) for title, col_defs in step_definitions]
-
-show_step()
-
-sign_outButton=ttk.Button(st, text='Sign Out', command=SignOutST)
-sign_outButton.place(x=1170,y=15)
-
-# Rlogin Frame
-rl = tk.Frame(ges)
-bgrl=Frame(rl,bg='#E8D8D8')
-bgrl.place(x=0,y=0,width=1320,height=780)
-bgI1 = Image.open("EECP GESYS FrontSS.jpg")
-bgI1 = bgI1.resize((1320, 780))
-bgP1 = ImageTk.PhotoImage(bgI1)
-background_labelrl = tk.Label(bgrl, image=bgP1)
-background_labelrl.place(relwidth=1, relheight=1)
-
-placeholder_texta = "Registrar Number"
-username_entryr = ttk.Entry(rl, foreground='grey')
-username_entryr.place(x=900, y=420, width=300, height=30)
-username_entryr.insert(0, placeholder_texta)
-username_entryr.bind('<FocusIn>', lambda event: on_entry_click(event,username_entryr, placeholder_texta))
-username_entryr.bind('<FocusOut>', lambda event: on_focusout(event, username_entryr, placeholder_texta))
-
-placeholder_textb = "Password"
-password_entryr = ttk.Entry(rl, foreground='grey', show="*")
-password_entryr.place(x=900, y=470, width=300, height=30)
-password_entryr.insert(0, placeholder_textb)
-password_entryr.bind('<FocusIn>', lambda event: on_entry_click(event,password_entryr, placeholder_textb))
-password_entryr.bind('<FocusOut>', lambda event: on_focusout(event, password_entryr, placeholder_textb))
-
-rlButton=ttk.Button(rl,text='Login',command=login2)
-rlButton.place(x=955, y=550, width=200,height=30)
-
-rlSButton=ttk.Button(rl,text='Sign-up',command=showRS)
-rlSButton.place(x=983, y=601, width=150,height=50)
-
-rlBackButton=ttk.Button(rl,text='Back', command=showGES2)
-rlBackButton.place(x=983, y=661, width=150,height=50)
-
-# rsignup Frame
-rs = tk.Frame(ges)
-
-bg3=Frame(rs,bg='#E8D8D8')
-bg3.place(x=0,y=0,width=1320,height=780)
-bgI3 = Image.open("rsignup.jpg")
-bgI3 = bgI3.resize((1320, 780))
-bgP3 = ImageTk.PhotoImage(bgI3)
-background_labelr = tk.Label(bg3, image=bgP3)
-background_labelr.place(relwidth=1, relheight=1)
-
-midFrame1=Frame(rs,bg='grey')
-midFrame1.place(x=450,y=100,width=350,height=600)
-midFrame1=Frame(rs,bg='white')
-midFrame1.place(x=451,y=101,width=348,height=598)
-
-login_titleLabel2 = tk.Label(rs,text='Sign up here', bg='white', font=('Cambria', 15, 'bold'))
-login_titleLabel2.place(x=525, y=150, width=200,height=30)
-
-placeholder_textc = "Name"
-username_entry1 = ttk.Entry(rs, foreground='grey')
-username_entry1.place(x=497,y=280, width=250, height=40)
-username_entry1.insert(0, placeholder_textc)
-username_entry1.bind('<FocusIn>', lambda event: on_entry_click(event,username_entry1, placeholder_textc))
-username_entry1.bind('<FocusOut>', lambda event: on_focusout(event, username_entry1, placeholder_textc))
-
-placeholder_textd = "Registrar Number"
-rn_entry= ttk.Entry(rs, foreground='grey')
-rn_entry.place(x=497,y=340, width=250, height=40)
-rn_entry.insert(0, placeholder_textd)
-rn_entry.bind('<FocusIn>', lambda event: on_entry_click(event,rn_entry, placeholder_textd))
-rn_entry.bind('<FocusOut>', lambda event: on_focusout(event, rn_entry, placeholder_textd))
-
-placeholder_texte = "Password"
-pass_entry1 = ttk.Entry(rs, foreground='grey', show="*")
-pass_entry1.place(x=497,y=400, width=250, height=40)
-pass_entry1.insert(0, placeholder_texte)
-pass_entry1.bind('<FocusIn>', lambda event: on_entry_click(event,pass_entry1, placeholder_texte))
-pass_entry1.bind('<FocusOut>', lambda event: on_focusout(event, pass_entry1, placeholder_texte))
-
-placeholder_textf = "Confirm Password"
-cpass_entry1 = ttk.Entry(rs, foreground='grey', show="*")
-cpass_entry1.place(x=497,y=460, width=250, height=40)
-cpass_entry1.insert(0, placeholder_textf)
-cpass_entry1.bind('<FocusIn>', lambda event: on_entry_click(event,cpass_entry1, placeholder_textf))
-cpass_entry1.bind('<FocusOut>', lambda event: on_focusout(event, cpass_entry1, placeholder_textf))
-
-SignUpButton1=ttk.Button(rs,text='Sign up',command=sign_up)
-SignUpButton1.place(x=497, y=580, width=250,height=30)
-
-bButton1=ttk.Button(rs,text='Back',command=showRL2)
-bButton1.place(x=497, y=620, width=250,height=30)
-
-# Registrar Frame
-re = tk.Frame(ges)
-connectButton=ttk.Button(re,text='Connect Database')
-connectButton.place(x=980,y=15)
-
-leftFrame=Frame(re,bg='#A64C4C')
-leftFrame.place(x=50,y=80,width=10,height=650)
-
-rightFrame=Frame(re,bg='#E8D8D8')
-rightFrame.place(x=90,y=80,width=1120,height=650)
-
-background_image4 = Image.open("studentbg.jpg")
-background_image4 = background_image4.resize((1320, 780))
-background_photo4 = ImageTk.PhotoImage(background_image4)
-background_label4 = tk.Label(rightFrame, image=background_photo4)
-background_label4.place(relwidth=1, relheight=1)
-
-placeholder_textg = "Student Name/Student Number"
-Std_entry = ttk.Entry(re, foreground='grey')
-Std_entry.place(x=100, y=39, width=400, height=30)
-Std_entry.insert(0, placeholder_textg)
-Std_entry.bind('<FocusIn>', lambda event: on_entry_click(event,Std_entry, placeholder_textg))
-Std_entry.bind('<FocusOut>', lambda event: on_focusout(event, Std_entry, placeholder_textg))
-
-srcstudentButton=ttk.Button(re,text='Search')
-srcstudentButton.place(x=510, y=40)
-
-searchButton1=ttk.Button(rightFrame,text='Search')
-searchButton1.place(x=435, y=50)
-
-placeholder_texth = "Subject/Year Level/Semester"
-subj_entry4 = ttk.Entry(rightFrame, foreground='grey')
-subj_entry4.place(x=30, y=49, width=400, height=30)
-subj_entry4.insert(0, placeholder_texth)
-subj_entry4.bind('<FocusIn>', lambda event: on_entry_click(event,subj_entry4, placeholder_texth))
-subj_entry4.bind('<FocusOut>', lambda event: on_focusout(event,subj_entry4, placeholder_texth))
-
-std1Table = ttk.Treeview(rightFrame, columns=('Course Number','Subject', 'Units', 'Rating', 'Final Grade','Status'))
-std1Table.place(x=30, y=100,width=1060 ,height=510)
-std1Table.column('Course Number', width=30)
-std1Table.column('Subject', width=380)
-std1Table.column('Units', width=30)
-std1Table.column('Rating', width=80)
-std1Table.column('Final Grade', width=80)
-std1Table.column('Status', width=60)
-
-std1Table.heading('Course Number', text='Course No.')
-std1Table.heading('Subject', text='Subject')
-std1Table.heading('Units', text='Units')
-std1Table.heading('Rating', text='Ratings')
-std1Table.heading('Final Grade', text='Final Grade')
-std1Table.heading('Status', text='Status')
-std1Table.config(show='headings')
-
-std1Table.bind("<Double-1>", lambda event: edit_item(event, std1Table))
-std1Table.bind("<Double-1>", lambda event: edit_item(event, std1Table))
-
-# Populate the registrar table initially
-update_student_table(std1Table)
-
-signoutButton=ttk.Button(re, text='Sign Out', command=SignOutRE)
-signoutButton.place(x=1170,y=15)
-
-ges.mainloop()
+        column_id = int(column[1]) - 1  # Convert visual column to data column
+        item = tree.selection()[0]
+        
+        # Only allow editing midterm and final grades
+        if column_id not in [6, 7]:  # midterm_grade and final_grade columns
+            messagebox.showinfo("Info", "This field cannot be edited")
+            return
+            
+        current_value = tree.item(item)['values'][column_id]
+        column_name = tree['columns'][column_id]
+        
+        # Show dialog to edit value
+        new_value = simpledialog.askstring(
+            "Edit Grade",
+            f"Enter new value for {column_name}:",
+            initialvalue=current_value
+        )
+        
+        if new_value is not None:
+            try:
+                # Update treeview
+                values = list(tree.item(item)['values'])
+                values[column_id] = new_value
+                tree.item(item, values=values)
+                
+                # Update database
+                with sqlite3.connect('my_database.db') as conn:
+                    cursor = conn.cursor()
+                    student_number = values[0]
+                    course_code = values[2]
+                    cursor.execute(f"""
+                        UPDATE grades 
+                        SET {column_name} = ? 
+                        WHERE student_number = ? AND course_code = ?
+                    """, (new_value, student_number, course_code))
+                    conn.commit()
+                    
+            except sqlite3.Error as e:
+                messagebox.showerror("Database Error", f"Failed to update grade: {e}")
+                self.populate_registrar_treeview()  # Refresh to show original data
+            except Exception as e:
+                messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+                self.populate_registrar_treeview()
+
+    def populate_registrar_treeview(self):
+        """Populate the registrar dashboard treeview with all student grades."""
+        try:
+            # Clear existing items
+            for item in self.registrar_tree.get_children():
+                self.registrar_tree.delete(item)
+            
+            with sqlite3.connect('my_database.db') as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT s.student_number, s.name, c.course_code, c.course_name,
+                           g.semester, g.school_year, g.midterm_grade, g.final_grade, g.remarks
+                    FROM grades g
+                    JOIN students s ON g.student_number = s.student_number
+                    JOIN courses c ON g.course_code = c.course_code
+                    ORDER BY s.student_number, g.semester, c.course_code
+                """)
+                
+                for row in cursor.fetchall():
+                    self.registrar_tree.insert('', 'end', values=row)
+                    
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Failed to fetch grades: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+
+    def initialize_database(self):
+        """Initialize the database with required tables."""
+        try:
+            with sqlite3.connect('my_database.db') as conn:
+                cursor = conn.cursor()
+                
+                # Drop existing tables if they exist
+                cursor.execute("DROP TABLE IF EXISTS student")
+                cursor.execute("DROP TABLE IF EXISTS students")
+                cursor.execute("DROP TABLE IF EXISTS registrars")
+                cursor.execute("DROP TABLE IF EXISTS courses")
+                cursor.execute("DROP TABLE IF EXISTS grades")
+                
+                # Create students table
+                cursor.execute("""
+                    CREATE TABLE students (
+                        student_number TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        course TEXT NOT NULL,
+                        mobile_number TEXT,
+                        email_address TEXT,
+                        password TEXT NOT NULL
+                    )
+                """)
+                
+                # Create registrars table
+                cursor.execute("""
+                    CREATE TABLE registrars (
+                        registrar_number TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        password TEXT NOT NULL
+                    )
+                """)
+                
+                # Create courses table
+                cursor.execute("""
+                    CREATE TABLE courses (
+                        course_code TEXT PRIMARY KEY,
+                        course_name TEXT NOT NULL,
+                        units INTEGER NOT NULL
+                    )
+                """)
+                
+                # Create grades table
+                cursor.execute("""
+                    CREATE TABLE grades (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        student_number TEXT NOT NULL,
+                        course_code TEXT NOT NULL,
+                        semester TEXT NOT NULL,
+                        school_year TEXT NOT NULL,
+                        midterm_grade REAL,
+                        final_grade REAL,
+                        remarks TEXT,
+                        FOREIGN KEY (student_number) REFERENCES students(student_number),
+                        FOREIGN KEY (course_code) REFERENCES courses(course_code)
+                    )
+                """)
+                
+                # Insert default courses
+                default_courses = [
+                    ('CS101', 'Introduction to Computing', 3),
+                    ('CS102', 'Computer Programming 1', 3),
+                    ('CS103', 'Computer Programming 2', 3),
+                    ('CS104', 'Data Structures and Algorithms', 3),
+                    ('CS105', 'Object-Oriented Programming', 3)
+                ]
+                cursor.executemany(
+                    "INSERT INTO courses (course_code, course_name, units) VALUES (?, ?, ?)",
+                    default_courses
+                )
+                
+                # Insert test accounts
+                # Test student account (password: 123456)
+                cursor.execute("""
+                    INSERT INTO students (student_number, name, course, mobile_number, email_address, password)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, ('2023-0001', 'Test Student', 'BS Computer Science', '1234567890', 
+                      'test@example.com', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'))
+                
+                # Test registrar account (password: 123456)
+                cursor.execute("""
+                    INSERT INTO registrars (registrar_number, name, password)
+                    VALUES (?, ?, ?)
+                """, ('REG-001', 'Test Registrar', 
+                     '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'))
+                
+                # Insert test grades
+                test_grades = [
+                    ('2023-0001', 'CS101', '1st', '2023-2024', 85.5, 88.0, 'PASSED'),
+                    ('2023-0001', 'CS102', '1st', '2023-2024', 90.0, 92.5, 'PASSED'),
+                    ('2023-0001', 'CS103', '1st', '2023-2024', 87.5, 89.0, 'PASSED')
+                ]
+                cursor.executemany("""
+                    INSERT INTO grades (student_number, course_code, semester, school_year, 
+                                     midterm_grade, final_grade, remarks)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, test_grades)
+                
+                conn.commit()
+                print("Database initialized successfully!")
+                
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            messagebox.showerror("Database Error", f"Failed to initialize database: {e}")
+            raise
+        except Exception as e:
+            print(f"Error: {e}")
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            raise
+
+    def show_entry(self):
+        """Show the entry screen and hide other frames."""
+        self.hide_all_frames()
+        self.entry_frame.grid(row=0, column=0, sticky="nsew")
+        
+    def hide_all_frames(self):
+        """Hide all frames in the application."""
+        if hasattr(self, 'entry_frame'):
+            self.entry_frame.grid_remove()
+        if hasattr(self, 'student_login'):
+            self.student_login.grid_remove()
+        if hasattr(self, 'student_signup'):
+            self.student_signup.grid_remove()
+        if hasattr(self, 'student_dashboard'):
+            self.student_dashboard.grid_remove()
+        if hasattr(self, 'registrar_login'):
+            self.registrar_login.grid_remove()
+        if hasattr(self, 'registrar_dashboard'):
+            self.registrar_dashboard.grid_remove()
+
+    def show_student_login(self):
+        """Show student login screen."""
+        self.hide_all_frames()
+        self.student_login.grid(row=0, column=0, sticky="nsew")
+
+    def show_student_signup(self):
+        """Show student signup screen."""
+        self.hide_all_frames()
+        self.student_signup.grid(row=0, column=0, sticky="nsew")
+
+    def show_student_dashboard(self):
+        """Show student dashboard screen."""
+        self.hide_all_frames()
+        self.student_dashboard.grid(row=0, column=0, sticky="nsew")
+        self.populate_student_treeview()
+
+    def show_registrar_login(self):
+        """Show registrar login screen."""
+        self.hide_all_frames()
+        self.registrar_login.grid(row=0, column=0, sticky="nsew")
+
+    def show_registrar_dashboard(self):
+        """Show registrar dashboard screen."""
+        self.hide_all_frames()
+        self.registrar_dashboard.grid(row=0, column=0, sticky="nsew")
+        self.populate_registrar_treeview()
+
+    def student_login_action(self):
+        student_number = self.student_username.get().strip()
+        password = self.student_password.get()
+
+        if not student_number or not password:
+            messagebox.showwarning("Input Error", "Please fill in all fields!")
+            return
+
+        try:
+            with sqlite3.connect('my_database.db') as conn:
+                cursor = conn.cursor()
+                hashed_password = hash_password(password)
+                cursor.execute("""
+                    SELECT name, student_number 
+                    FROM students 
+                    WHERE student_number = ? AND password = ?
+                """, (student_number, hashed_password))
+                result = cursor.fetchone()
+
+                if result:
+                    messagebox.showinfo("Success", f"Welcome, {result[0]}!")
+                    self.current_student = result[1]  # Store student number for dashboard
+                    self.show_student_dashboard()
+                else:
+                    messagebox.showerror("Error", "Invalid student number or password!")
+
+        except sqlite3.Error as e:
+            messagebox.showerror("Database Error", f"Failed to verify credentials: {e}")
+            print(f"Database error: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            print(f"Error: {e}")
+
+    def sign_up_st(self):
+        name = self.signup_name.get()
+        student_number = self.signup_student_number.get()
+        course = self.signup_course.get()
+        mobile_number = self.signup_mobile.get()
+        email = self.signup_email.get()
+        password = self.signup_password.get()
+        confirm_password = self.signup_confirm_password.get()
+
+        # Check if all fields are filled
+        if not name or not student_number or not course or not mobile_number or not email or not password or not confirm_password:
+            messagebox.showwarning("Input Error", "All fields are required!")
+            return
+
+        if password != confirm_password:
+            messagebox.showerror("Error", "Passwords do not match.")
+            return
+
+        try:
+            # Call the function with all the necessary arguments
+            insert_user_data_st(name, student_number, course, mobile_number, email, password)
+            messagebox.showinfo("Success", "Sign-Up Successful!")
+            self.show_student_login()
+            self.clear_student_signup_form()
+        except sqlite3.IntegrityError:
+            messagebox.showerror("Error", "This student number is already taken.")
+        except sqlite3.Error as e:
+            messagebox.showerror("Error", f"Database error: {e}")
+
+    def sign_up(self):
+        registrar_number = self.rn_entry.get()
+        name = self.username_entry1.get()
+        password = self.pass_entry1.get()
+
+        # Check if all fields are filled
+        if not registrar_number or not name or not password:
+            messagebox.showwarning("Input Error", "All fields are required!")
+            return
+
+        try:
+            # Insert data into the database
+            insert_user_dataR(registrar_number, name, password)
+            messagebox.showinfo("Success", "Sign-Up Successful!")
+            self.show_registrar_login()
+            self.clear_registrar_signup_form()
+        except sqlite3.IntegrityError:
+            messagebox.showerror("Error", "This registrar number is already taken.")
+        except sqlite3.Error as e:
+            messagebox.showerror("Error", f"Database error: {e}")
+
+    def clear_student_signup_form(self):
+        self.signup_name.delete(0, tk.END)
+        self.signup_student_number.delete(0, tk.END)
+        self.signup_course.set('')
+        self.signup_mobile.delete(0, tk.END)
+        self.signup_email.delete(0, tk.END)
+        self.signup_password.delete(0, tk.END)
+        self.signup_confirm_password.delete(0, tk.END)
+
+    def clear_registrar_signup_form(self):
+        self.rn_entry.delete(0, tk.END)
+        self.username_entry1.delete(0, tk.END)
+        self.pass_entry1.delete(0, tk.END)
+
+    def run(self):
+        self.root.mainloop()
+
+
+if __name__ == "__main__":
+    # Create images directory if it doesn't exist
+    IMAGES_DIR.mkdir(exist_ok=True)
+    
+    # Initialize and run the application
+    app = GradeEvaluationSystem()
+    app.run()

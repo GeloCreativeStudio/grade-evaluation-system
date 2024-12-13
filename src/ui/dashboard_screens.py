@@ -4,6 +4,7 @@ Dashboard screens for the Grade Evaluation System.
 
 import tkinter as tk
 from tkinter import ttk, messagebox
+import re
 from ..database.database_operations import (
     fetch_student_data, fetch_student_grades, update_grade,
     delete_grade, search_students, insert_user_data_st,
@@ -453,14 +454,20 @@ class RegistrarDashboardNew(ttk.Frame):
         
         # Validate email format
         email = fields['email_address'].get().strip()
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            messagebox.showwarning("Input Error", "Invalid email address format!")
+        if not validate_email(email):
+            messagebox.showwarning("Input Error", "Invalid email format! Must end with @eecp.edu.ph")
             return
         
         # Validate mobile number
         mobile = fields['mobile_number'].get().strip()
-        if not mobile.isdigit() or len(mobile) != 11:
-            messagebox.showwarning("Input Error", "Mobile number should be 11 digits!")
+        if len(mobile) != 11:
+            messagebox.showwarning("Input Error", "Mobile number must be exactly 11 digits!")
+            return
+        if not mobile.startswith('09'):
+            messagebox.showwarning("Input Error", "Mobile number must start with '09'!")
+            return
+        if not mobile[2:].isdigit():
+            messagebox.showwarning("Input Error", "Mobile number must contain only digits!")
             return
         
         try:
@@ -714,14 +721,20 @@ class RegistrarDashboardNew(ttk.Frame):
         
         # Validate email format
         email = fields['email_address'].get().strip()
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            messagebox.showwarning("Input Error", "Invalid email address format!")
+        if not validate_email(email):
+            messagebox.showwarning("Input Error", "Invalid email format! Must end with @eecp.edu.ph")
             return
         
         # Validate mobile number
         mobile = fields['mobile_number'].get().strip()
-        if not mobile.isdigit() or len(mobile) != 11:
-            messagebox.showwarning("Input Error", "Mobile number should be 11 digits!")
+        if len(mobile) != 11:
+            messagebox.showwarning("Input Error", "Mobile number must be exactly 11 digits!")
+            return
+        if not mobile.startswith('09'):
+            messagebox.showwarning("Input Error", "Mobile number must start with '09'!")
+            return
+        if not mobile[2:].isdigit():
+            messagebox.showwarning("Input Error", "Mobile number must contain only digits!")
             return
         
         try:
